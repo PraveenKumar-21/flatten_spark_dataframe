@@ -1,0 +1,9 @@
+LICENSE
+README.md
+setup.py
+flatten_spark_dataframe/__init__.py
+flatten_spark_dataframe.egg-info/PKG-INFO
+flatten_spark_dataframe.egg-info/SOURCES.txt
+flatten_spark_dataframe.egg-info/dependency_links.txt
+flatten_spark_dataframe.egg-info/requires.txt
+flatten_spark_dataframe.egg-info/top_level.txt
