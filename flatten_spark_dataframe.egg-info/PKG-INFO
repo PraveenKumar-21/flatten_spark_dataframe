@@ -1,81 +1,266 @@
-Metadata-Version: 2.1
-Name: flatten-spark-dataframe
-Version: 0.0.1
+Metadata-Version: 2.4
+Name: flatten_spark_dataframe
+Version: 0.0.2
 Summary: Databricks PySpark module to flatten nested spark dataframes, basically struct and array of struct till the specified level
 Home-page: https://github.com/PraveenKumar-21/flatten_spark_dataframe
 Author: Praveen Kumar B
 Author-email: bpraveenkumar21@gmail.com
-License: UNKNOWN
-Keywords: PySpark flatten dataframe,Databricks PySpark flatten dataframe,PySpark nested dataframe,databricks pyspark nested dataframe,flatten dataframe,nested dataframe
-Platform: UNKNOWN
+Keywords: PySpark flatten dataframe,Databricks PySpark flatten dataframe,Databricks PySpark flatten dataframe level wise,PySpark nested dataframe,databricks pyspark nested dataframe,flatten dataframe,nested dataframe
 Classifier: Programming Language :: Python :: 3
 Classifier: License :: OSI Approved :: MIT License
 Classifier: Operating System :: OS Independent
 Requires-Python: >=3.6
 Description-Content-Type: text/markdown
 License-File: LICENSE
+Requires-Dist: pyspark
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: keywords
+Dynamic: license-file
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
 
-# Flatten Pyspark dataframe
-### This module flattens a given spark dataframe
-### All struct and array of struct columns will be flattened
+# flatten_spark_dataframe
 
-###### Sample input pyspark dataframe
+A lightweight PySpark utility to **recursively flatten deeply nested Spark DataFrames** — automatically expanding `StructType` and `ArrayType(StructType)` columns into clean, top-level columns.
+
+[![PyPI version](https://badge.fury.io/py/flatten-spark-dataframe.svg)](https://pypi.org/project/flatten-spark-dataframe/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+---
+
+## Why use this library?
+
+Working with nested JSON data in PySpark is painful. A single deeply nested struct can require dozens of lines of manual `col("a.b.c").alias(...)` expressions, and arrays of structs need explicit `explode()` calls — all of which must be written by hand for every schema.
+
+**`flatten_spark_dataframe` solves this in one line:**
+
+| Without this library | With this library |
+|---|---|
+| Manually write `.select()` / `.withColumn()` for every nested field | One function call: `flatten(df)` |
+| Must know the full schema upfront | Automatically discovers all nested columns |
+| Exploding arrays requires separate steps | Arrays of structs are exploded + flattened automatically |
+| Renaming nested fields is tedious | Clean `parent_child` naming convention applied automatically |
+| No control over flattening depth | Control exactly how many levels to flatten |
+| Columns you want nested stay nested? Manual filtering. | Pass an `exclude_list` to skip specific columns |
+
+---
+
+## Installation
+
+```bash
+pip install flatten-spark-dataframe
 ```
-data = [
-        ((("A","James"),None,"Smith"),"OH","M",("F","Mike")),
-        ((("B","Anna"),"Rose",""),"NY","F",("E","Jen")),
-        ((("C","Julia"),"","Williams"),"OH","F",("D","Maria")),
-        ((("D","Maria"),"Anne","Jones"),"NY","M",("C","Julia")),
-        ((("E","Jen"),"Mary","Brown"),"NY","M",("B","Anna")),
-        ((("F","Mike"),"Mary","Williams"),"OH","M",("A","James"))
-        ]
 
-from pyspark.sql.types import StructType,StructField, StringType        
+---
+
+## Quick Start
+
+```python
+import flatten_spark_dataframe
+
+# Flatten everything (all levels)
+flat_df = flatten_spark_dataframe.flatten(df)
+
+# Flatten only 1 level deep
+flat_df = flatten_spark_dataframe.flatten(df, flatten_till_level=1)
+
+# Exclude specific columns from flattening
+flat_df = flatten_spark_dataframe.flatten(df, exclude_list=["address", "metadata"])
+```
+
+---
+
+## Parameters
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `df` | DataFrame | *(required)* | The input PySpark DataFrame with nested columns |
+| `flatten_till_level` | `'complete'` or `int` | `'complete'` | `'complete'` flattens all levels; an integer limits the depth (e.g., `1` = one level only) |
+| `exclude_list` | `list[str]` | `[]` | Column names (lowercase) to skip — these are kept nested in the output |
+
+---
+
+## Detailed Example
+
+### Sample Data (3 levels of nesting)
+
+The schema below has **struct inside struct** (`name.firstname.initial`) and a top-level struct (`country`):
+
+```
+root
+ |-- name: struct
+ |    |-- firstname: struct        ← Level 1
+ |    |    |-- initial: string     ← Level 2
+ |    |    |-- actualname: string  ← Level 2
+ |    |-- middlename: string       ← Level 1
+ |    |-- lastname: string         ← Level 1
+ |-- state: string
+ |-- gender: string
+ |-- country: struct
+ |    |-- city: string             ← Level 1
+ |    |-- street: string           ← Level 1
+```
+
+```python
+from pyspark.sql.types import StructType, StructField, StringType
+
+data = [
+    ((("A", "James"), None, "Smith"), "OH", "M", ("F", "Mike")),
+    ((("B", "Anna"), "Rose", ""), "NY", "F", ("E", "Jen")),
+    ((("C", "Julia"), "", "Williams"), "OH", "F", ("D", "Maria")),
+    ((("D", "Maria"), "Anne", "Jones"), "NY", "M", ("C", "Julia")),
+    ((("E", "Jen"), "Mary", "Brown"), "NY", "M", ("B", "Anna")),
+    ((("F", "Mike"), "Mary", "Williams"), "OH", "M", ("A", "James")),
+]
+
 schema = StructType([
     StructField('name', StructType([
-         StructField('firstname', StructType([
-         StructField('initial', StringType(), True),
-         StructField('actualname', StringType(), True)])),
-         StructField('middlename', StringType(), True),
-         StructField('lastname', StringType(), True)
-         ])),
-     StructField('state', StringType(), True),
-     StructField('gender', StringType(), True),
-	 StructField('country', StructType([
-         StructField('city', StringType(), True),
-         StructField('street', StringType(), True)])),
-     ])
-dfn = spark.createDataFrame(data = data, schema = schema)
+        StructField('firstname', StructType([
+            StructField('initial', StringType(), True),
+            StructField('actualname', StringType(), True),
+        ])),
+        StructField('middlename', StringType(), True),
+        StructField('lastname', StringType(), True),
+    ])),
+    StructField('state', StringType(), True),
+    StructField('gender', StringType(), True),
+    StructField('country', StructType([
+        StructField('city', StringType(), True),
+        StructField('street', StringType(), True),
+    ])),
+])
 
+df = spark.createDataFrame(data=data, schema=schema)
 ```
-```
+
+---
+
+### Example 1: Flatten completely (all levels)
+
+```python
 import flatten_spark_dataframe
-flattened_dataframe = flatten_spark_dataframe.flatten(dfn)
-```
-### Output text
-```
-flat_cols: ['state AS state', 'gender AS gender']
-nested_cols: ['name.`firstname` AS name_firstname', 'name.`middlename` AS name_middlename', 'name.`lastname` AS name_lastname', 'country.`city` AS country_city', 'country.`street` AS country_street']
-array_cols: []
----------- Nested level: 1  -------------------
-flat_cols: ['state AS state', 'gender AS gender', 'name_middlename AS name_middlename', 'name_lastname AS name_lastname', 'country_city AS country_city', 'country_street AS country_street']
-nested_cols: ['name_firstname.`initial` AS name_firstname_initial', 'name_firstname.`actualname` AS name_firstname_actualname']
-array_cols: []
----------- Nested level: 2  -------------------
-flat_cols: ['state AS state', 'gender AS gender', 'name_middlename AS name_middlename', 'name_lastname AS name_lastname', 'country_city AS country_city', 'country_street AS country_street', 'name_firstname_initial AS name_firstname_initial', 'name_firstname_actualname AS name_firstname_actualname']
-nested_cols: []
-array_cols: []
-```
-```
-flattened_dataframe.take(10)
-```
-```
-[Row(state='OH', gender='M', name_middlename=None, name_lastname='Smith', country_city='F', country_street='Mike', name_firstname_initial='A', name_firstname_actualname='James'),
- Row(state='NY', gender='F', name_middlename='Rose', name_lastname='', country_city='E', country_street='Jen', name_firstname_initial='B', name_firstname_actualname='Anna'),
- Row(state='OH', gender='F', name_middlename='', name_lastname='Williams', country_city='D', country_street='Maria', name_firstname_initial='C', name_firstname_actualname='Julia'),
- Row(state='NY', gender='M', name_middlename='Anne', name_lastname='Jones', country_city='C', country_street='Julia', name_firstname_initial='D', name_firstname_actualname='Maria'),
- Row(state='NY', gender='M', name_middlename='Mary', name_lastname='Brown', country_city='B', country_street='Anna', name_firstname_initial='E', name_firstname_actualname='Jen'),
- Row(state='OH', gender='M', name_middlename='Mary', name_lastname='Williams', country_city='A', country_street='James', name_firstname_initial='F', name_firstname_actualname='Mike')]
+
+flat_df = flatten_spark_dataframe.flatten(df)
+flat_df.show()
 ```
 
+**What happens internally:**
 
+- **Level 1** — `name` is expanded to `name_firstname` (still a struct), `name_middlename`, `name_lastname`. `country` is expanded to `country_city`, `country_street`.
+- **Level 2** — `name_firstname` is expanded to `name_firstname_initial`, `name_firstname_actualname`.
+
+**Output:**
+
+```
++-----+------+---------------+-------------+------------+--------------+----------------------+--------------------------+
+|state|gender|name_middlename|name_lastname|country_city|country_street|name_firstname_initial |name_firstname_actualname |
++-----+------+---------------+-------------+------------+--------------+----------------------+--------------------------+
+|   OH|     M|           null|        Smith|           F|          Mike|                     A |                     James|
+|   NY|     F|           Rose|             |           E|           Jen|                     B |                      Anna|
+|   OH|     F|               |     Williams|           D|         Maria|                     C |                     Julia|
+|   NY|     M|           Anne|        Jones|           C|         Julia|                     D |                     Maria|
+|   NY|     M|           Mary|        Brown|           B|          Anna|                     E |                       Jen|
+|   OH|     M|           Mary|     Williams|           A|        James |                     F |                      Mike|
++-----+------+---------------+-------------+------------+--------------+----------------------+--------------------------+
+```
+
+All nested structs have been fully flattened into **8 top-level columns**.
+
+---
+
+### Example 2: Flatten only 1 level deep
+
+```python
+flat_df_l1 = flatten_spark_dataframe.flatten(df, flatten_till_level=1)
+flat_df_l1.printSchema()
+```
+
+**Output schema:**
+
+```
+root
+ |-- state: string
+ |-- gender: string
+ |-- name_firstname: struct       ← Still nested (would need level 2 to expand)
+ |    |-- initial: string
+ |    |-- actualname: string
+ |-- name_middlename: string      ← Flattened from name.middlename
+ |-- name_lastname: string        ← Flattened from name.lastname
+ |-- country_city: string         ← Flattened from country.city
+ |-- country_street: string       ← Flattened from country.street
+```
+
+Only the **first level** of structs is expanded. `name_firstname` remains a struct because it was at level 2.
+
+---
+
+### Example 3: Flatten with exclusions
+
+```python
+flat_df_excl = flatten_spark_dataframe.flatten(df, exclude_list=["country"])
+flat_df_excl.printSchema()
+```
+
+**Output schema:**
+
+```
+root
+ |-- country: struct              ← Kept nested (excluded)
+ |    |-- city: string
+ |    |-- street: string
+ |-- state: string
+ |-- gender: string
+ |-- name_middlename: string
+ |-- name_lastname: string
+ |-- name_firstname_initial: string
+ |-- name_firstname_actualname: string
+```
+
+The `country` struct is **preserved as-is** while everything else is fully flattened.
+
+---
+
+### Example 4: Combine level control + exclusions
+
+```python
+flat_df_combo = flatten_spark_dataframe.flatten(df, flatten_till_level=1, exclude_list=["country"])
+flat_df_combo.printSchema()
+```
+
+**Output schema:**
+
+```
+root
+ |-- country: struct              ← Excluded — kept nested
+ |    |-- city: string
+ |    |-- street: string
+ |-- state: string
+ |-- gender: string
+ |-- name_firstname: struct       ← Level 2 — not flattened (limit = 1)
+ |    |-- initial: string
+ |    |-- actualname: string
+ |-- name_middlename: string
+ |-- name_lastname: string
+```
+
+---
+
+## How it works
+
+1. **Classifies columns** into flat (primitives), struct, and array-of-struct categories
+2. **Expands structs** into sub-fields using `parent_child` naming (special characters are cleaned)
+3. **Explodes arrays** of structs using `explode_outer()` (preserves rows even when the array is null/empty)
+4. **Recurses** until all levels are flattened or the depth limit is reached
+5. **Handles duplicates** — if a flattened field name collides with an existing column, a suffix is appended
+
+---
+
+## License
+
+[MIT](LICENSE)
